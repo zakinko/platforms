@@ -1,0 +1,39 @@
+# host_constraints_test を BSD で回す。
+#
+# この枝の変更が正しいことは「NetBSD で @platforms//host が os:netbsd を
+# 返す」で示されるが、それには NetBSD で動く Bazel が要る。いまは無いので、
+# まず Bazel が ports にある FreeBSD で、同じテストが通ることを見る。
+name: BSD
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  freebsd:
+    name: FreeBSD
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          mem: 8192
+          copyback: false
+          prepare: |
+            pkg install -y bazel9 openjdk21 bash python3 curl
+          run: |
+            set -e
+            export JAVA_HOME=/usr/local/openjdk21
+            export EXPECTED_HOST_CONSTRAINTS="['@platforms//cpu:x86_64', '@platforms//os:freebsd']"
+            bazel --output_user_root=/tmp/bazel \
+              test //tests/host:host_constraints_test \
+              --test_output=all \
+              --test_env=EXPECTED_HOST_CONSTRAINTS \
+              --extra_toolchains=@rules_python//python/runtime_env_toolchains:all \
+              --verbose_failures
