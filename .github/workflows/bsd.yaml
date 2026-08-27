@@ -30,7 +30,8 @@ jobs:
           run: |
             set -e
             export JAVA_HOME=/usr/local/openjdk21
-            export EXPECTED_HOST_CONSTRAINTS="['@platforms//cpu:x86_64', '@platforms//os:freebsd']"
+            # テストは repr を文字列で比べるので引用符まで一致させる。
+            export EXPECTED_HOST_CONSTRAINTS='["@platforms//cpu:x86_64", "@platforms//os:freebsd"]'
             bazel --output_user_root=/tmp/bazel \
               test //tests/host:host_constraints_test \
               --test_output=all \
