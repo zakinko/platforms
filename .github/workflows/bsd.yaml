@@ -35,5 +35,4 @@ jobs:
               test //tests/host:host_constraints_test \
               --test_output=all \
               --test_env=EXPECTED_HOST_CONSTRAINTS \
-              --extra_toolchains=@rules_python//python/runtime_env_toolchains:all \
               --verbose_failures
