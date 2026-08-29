@@ -9,6 +9,9 @@
 #
 # で落ち、当てれば通る。FreeBSD と OpenBSD も、その OS の bazel で同じ
 # ことを見る。
+#
+# DragonFly は入れられない。dports にあるのは bazel5-5.4.1 だけで、bzlmod
+# より古いので MODULE.bazel を読めない。
 name: BSD
 
 on:
@@ -79,6 +82,32 @@ jobs:
             export EXPECTED_HOST_CONSTRAINTS='["@platforms//cpu:x86_64", "@platforms//os:netbsd"]'
             # pkgsrc の bazel は 6.4.0 なので bzlmod は明示して立てる。
             bazel --output_user_root=/var/tmp/bazel \
+              test //tests/host:host_constraints_test \
+              --enable_bzlmod \
+              --test_output=all \
+              --test_env=EXPECTED_HOST_CONSTRAINTS \
+              --verbose_failures
+
+  openbsd:
+    name: OpenBSD
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/openbsd-vm@v1
+        with:
+          usesh: true
+          mem: 4096
+          copyback: false
+          prepare: |
+            pkg_add -I bazel jdk%21
+          run: |
+            set -e
+            export JAVA_HOME=$(ls -d /usr/local/jdk-21* | head -1)
+            # テストは repr を文字列で比べるので引用符まで一致させる。
+            export EXPECTED_HOST_CONSTRAINTS='["@platforms//cpu:x86_64", "@platforms//os:openbsd"]'
+            # devel/bazel は 6.5.0 なので bzlmod は明示して立てる。
+            bazel --output_user_root=/tmp/bazel \
               test //tests/host:host_constraints_test \
               --enable_bzlmod \
               --test_output=all \
