@@ -1,8 +1,14 @@
 # host_constraints_test を BSD で回す。
 #
 # この枝の変更が正しいことは「NetBSD で @platforms//host が os:netbsd を
-# 返す」で示されるが、それには NetBSD で動く Bazel が要る。いまは無いので、
-# まず Bazel が ports にある FreeBSD で、同じテストが通ることを見る。
+# 返す」で示される。NetBSD の binary set には bazel 6.4.0 が在り、この
+# module は bzlmod を立てればそれで解ける。当て物なしなら
+#
+#	actual   ["@platforms//cpu:x86_64"]
+#	expected ["@platforms//cpu:x86_64", "@platforms//os:netbsd"]
+#
+# で落ち、当てれば通る。FreeBSD と OpenBSD も、その OS の bazel で同じ
+# ことを見る。
 name: BSD
 
 on:
@@ -34,6 +40,36 @@ jobs:
             export EXPECTED_HOST_CONSTRAINTS='["@platforms//cpu:x86_64", "@platforms//os:freebsd"]'
             bazel --output_user_root=/tmp/bazel \
               test //tests/host:host_constraints_test \
+              --test_output=all \
+              --test_env=EXPECTED_HOST_CONSTRAINTS \
+              --verbose_failures
+
+  netbsd:
+    name: NetBSD
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/netbsd-vm@v1
+        with:
+          release: "11.0"
+          usesh: true
+          mem: 4096
+          copyback: false
+          prepare: |
+            set -e
+            /usr/sbin/pkg_add -U pkgin
+            pkgin -y install bazel openjdk21
+          run: |
+            set -e
+            export JAVA_HOME=/usr/pkg/java/openjdk21
+            export PATH=/usr/pkg/bin:$PATH
+            # テストは repr を文字列で比べるので引用符まで一致させる。
+            export EXPECTED_HOST_CONSTRAINTS='["@platforms//cpu:x86_64", "@platforms//os:netbsd"]'
+            # pkgsrc の bazel は 6.4.0 なので bzlmod は明示して立てる。
+            bazel --output_user_root=/var/tmp/bazel \
+              test //tests/host:host_constraints_test \
+              --enable_bzlmod \
               --test_output=all \
               --test_env=EXPECTED_HOST_CONSTRAINTS \
               --verbose_failures
