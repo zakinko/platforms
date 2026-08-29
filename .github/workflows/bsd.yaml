@@ -13,10 +13,21 @@ name: BSD
 
 on:
   push:
+    paths: &bsd_paths
+      - 'host/**'
+      - 'os/**'
+      - 'cpu/**'
+      - 'tests/**'
+      - 'MODULE.bazel'
+      - '.github/workflows/bsd.yaml'
+  pull_request:
+    paths: *bsd_paths
   workflow_dispatch:
 
+# head_ref を先に見ないと、push の ref と pull_request の ref が別物になって
+# 同じ枝で二重に走る。
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
