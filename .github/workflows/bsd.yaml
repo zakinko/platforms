@@ -75,6 +75,19 @@ jobs:
           prepare: |
             set -e
             /usr/sbin/pkg_add -U pkgin
+            # pkgsrc の openjdk21 は base の X11 に link されていて、
+            # /usr/X11R7/lib/libX11.so.7 などが要る。vmactions の image は
+            # X の set を入れていないので、pkgin がそこで蹴る。
+            #
+            #   /usr/X11R7/lib/libX11.so.7, needed by openjdk21-... is not
+            #   present in this system.
+            #
+            # pkgsrc 側の libX11 を入れても /usr/pkg/lib に置かれるだけで
+            # /usr/X11R7 は埋まらない。base の set を展開する。6.6MB。
+            ftp -o /tmp/xbase.tar.xz \
+              https://cdn.NetBSD.org/pub/NetBSD/NetBSD-$(uname -r)/$(uname -m)/binary/sets/xbase.tar.xz
+            xz -dc /tmp/xbase.tar.xz | tar -xpf - -C /
+            rm /tmp/xbase.tar.xz
             pkgin -y install bazel openjdk21
           run: |
             set -e
@@ -141,11 +154,21 @@ jobs:
             BAZEL=$(command -v bazel || command -v bazel5)
             # bazel5 の依存は openjdk11 で、openjdk21 ではない。
             export JAVA_HOME=$(ls -d /usr/local/openjdk11 | head -1)
+            "$JAVA_HOME/bin/java" -version
+            df -h /tmp
             export EXPECTED_HOST_CONSTRAINTS='["@platforms//cpu:x86_64", "@platforms//os:dragonfly"]'
             # 5.4.1 の bzlmod はまだ experimental の名前のまま。
+            #
+            # server が 120 秒で立たずに落ちても、client 側には理由が出て
+            # こない。JVM の側の出力を拾わないと何も分からないので、
+            # 落ちたら jvm.out を出してから終わる。
             "$BAZEL" --output_user_root=/tmp/bazel \
               test //tests/host:host_constraints_test \
               --experimental_enable_bzlmod \
               --test_output=all \
               --test_env=EXPECTED_HOST_CONSTRAINTS \
-              --verbose_failures
+              --verbose_failures || {
+                echo "===== jvm.out ====="
+                find /tmp/bazel -name 'jvm.out*' -exec cat {} + 2>/dev/null || true
+                exit 1
+              }
