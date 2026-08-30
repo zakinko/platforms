@@ -10,8 +10,10 @@
 # で落ち、当てれば通る。FreeBSD と OpenBSD も、その OS の bazel で同じ
 # ことを見る。
 #
-# DragonFly は入れられない。dports にあるのは bazel5-5.4.1 だけで、bzlmod
-# より古いので MODULE.bazel を読めない。
+# DragonFly も同じ形で見る。dports の binary にあるのは bazel5-5.4.1 だけ
+# だが、bzlmod は 5.0 から --experimental_enable_bzlmod で使える。依存の
+# package_metadata / rules_license / rules_shell はどれも bazel の下限を
+# 切っていないので、graph は解けるはずである。
 name: BSD
 
 on:
@@ -115,6 +117,35 @@ jobs:
             bazel --output_user_root=/tmp/bazel \
               test //tests/host:host_constraints_test \
               --enable_bzlmod \
+              --test_output=all \
+              --test_env=EXPECTED_HOST_CONSTRAINTS \
+              --verbose_failures
+
+  dragonfly:
+    name: DragonFly BSD
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/dragonflybsd-vm@v1
+        with:
+          usesh: true
+          mem: 4096
+          copyback: false
+          prepare: |
+            pkg install -y bazel5
+          run: |
+            set -e
+            # bazel5 が入れる名前は port によって bazel とも bazel5 とも
+            # なるので、決め打ちせず shell に引かせる。
+            BAZEL=$(command -v bazel || command -v bazel5)
+            # bazel5 の依存は openjdk11 で、openjdk21 ではない。
+            export JAVA_HOME=$(ls -d /usr/local/openjdk11 | head -1)
+            export EXPECTED_HOST_CONSTRAINTS='["@platforms//cpu:x86_64", "@platforms//os:dragonfly"]'
+            # 5.4.1 の bzlmod はまだ experimental の名前のまま。
+            "$BAZEL" --output_user_root=/tmp/bazel \
+              test //tests/host:host_constraints_test \
+              --experimental_enable_bzlmod \
               --test_output=all \
               --test_env=EXPECTED_HOST_CONSTRAINTS \
               --verbose_failures
