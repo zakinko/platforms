@@ -28,6 +28,10 @@ on:
   pull_request:
     paths: *bsd_paths
   workflow_dispatch:
+    inputs:
+      only:
+        description: '回す OS をコンマ区切りで (freebsd,netbsd,openbsd,dragonfly)。空なら全部'
+        default: ''
 
 # head_ref を先に見ないと、push の ref と pull_request の ref が別物になって
 # 同じ枝で二重に走る。
@@ -38,6 +42,9 @@ concurrency:
 jobs:
   freebsd:
     name: FreeBSD
+    # only が空なら (push と pull_request は必ず空) 全部回す。
+    # 手で回すときだけ、まだ通っていないものに絞れる。
+    if: ${{ github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',freebsd,') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -62,6 +69,9 @@ jobs:
 
   netbsd:
     name: NetBSD
+    # only が空なら (push と pull_request は必ず空) 全部回す。
+    # 手で回すときだけ、まだ通っていないものに絞れる。
+    if: ${{ github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',netbsd,') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -105,6 +115,9 @@ jobs:
 
   openbsd:
     name: OpenBSD
+    # only が空なら (push と pull_request は必ず空) 全部回す。
+    # 手で回すときだけ、まだ通っていないものに絞れる。
+    if: ${{ github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',openbsd,') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -136,6 +149,9 @@ jobs:
 
   dragonfly:
     name: DragonFly BSD
+    # only が空なら (push と pull_request は必ず空) 全部回す。
+    # 手で回すときだけ、まだ通っていないものに絞れる。
+    if: ${{ github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',dragonfly,') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -151,6 +167,16 @@ jobs:
             set -e
             # bazel5 が入れる名前は port によって bazel とも bazel5 とも
             # なるので、決め打ちせず shell に引かせる。
+            # DragonFly では JVM が既定の data 上限に当たって
+            #
+            #	Native memory allocation (mmap) failed to map 65536 bytes.
+            #	Error detail: Failed to commit metaspace.
+            #
+            # で数秒で死ぬ。client 側はそれを見られないので、120 秒待って
+            # 「server に繋がらない」とだけ言って終わる。物理も swap も
+            # 余っていて、効いているのは ulimit の方である。
+            ulimit -d unlimited 2>/dev/null || true
+            ulimit -n unlimited 2>/dev/null || ulimit -n 4096 2>/dev/null || true
             BAZEL=$(command -v bazel || command -v bazel5)
             # bazel5 の依存は openjdk11 で、openjdk21 ではない。
             export JAVA_HOME=$(ls -d /usr/local/openjdk11 | head -1)
