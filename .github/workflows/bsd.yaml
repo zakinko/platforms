@@ -10,10 +10,24 @@
 # で落ち、当てれば通る。FreeBSD と OpenBSD も、その OS の bazel で同じ
 # ことを見る。
 #
-# DragonFly も同じ形で見る。dports の binary にあるのは bazel5-5.4.1 だけ
-# だが、bzlmod は 5.0 から --experimental_enable_bzlmod で使える。依存の
-# package_metadata / rules_license / rules_shell はどれも bazel の下限を
-# 切っていないので、graph は解けるはずである。
+# DragonFly は dports の bazel では回せない。binary にあるのは
+# bazel5-5.4.1 だけで、bzlmod こそ 5.0 から使えるものの、この module が
+# 引く rules_shell 0.6.1 が Bazel 6 の Starlark を要求する。
+#
+#	rules_shell.0.6.1/shell/sh_test.bzl:19:1:
+#	    name 'visibility' is not defined
+#
+# graph は解ける。BCR から rules_shell も取ってくる。落ちるのはその先の
+# 読み込みで、どの依存も bazel_compatibility を書いていないので、下限を
+# 宣言していないことは動く根拠にならなかった。
+#
+# 併せて、5.4.1 の server は DragonFly で serve に進まない。port は bind
+# されて command_port も書かれ、client も TCP では繋がるが、accept された
+# まま読まれず CLOSE_WAIT で残り、900 秒待っても同じだった。--batch なら
+# 避けられるが、上の visibility() には効かない。
+#
+# 動かすには pkgsrc を bootstrap して devel/bazel 6.4.0 を入れるしかない。
+# それまでこの job は置かない。
 name: BSD
 
 on:
@@ -84,7 +98,15 @@ jobs:
           copyback: false
           prepare: |
             set -e
+            # 既定の ftp.netbsd.org と cdn.NetBSD.org はどちらも落ちる。
+            # 実際、この job は両方 Connection refused で二度落ちた。JAIST は
+            # pkgsrc の binary を持っていて、そこは生きていた。
+            PKG_PATH=https://ftp.jaist.ac.jp/pub/pkgsrc/packages/NetBSD/$(uname -p)/$(uname -r)/All
+            export PKG_PATH
             /usr/sbin/pkg_add -U pkgin
+            # pkgin は PKG_PATH ではなく自分の設定を見るので、そちらにも書く。
+            echo "$PKG_PATH" > /usr/pkg/etc/pkgin/repositories.conf
+            pkgin -y update
             # pkgsrc の openjdk21 は base の X11 に link されていて、
             # /usr/X11R7/lib/libX11.so.7 などが要る。vmactions の image は
             # X の set を入れていないので、pkgin がそこで蹴る。
@@ -95,7 +117,7 @@ jobs:
             # pkgsrc 側の libX11 を入れても /usr/pkg/lib に置かれるだけで
             # /usr/X11R7 は埋まらない。base の set を展開する。6.6MB。
             ftp -o /tmp/xbase.tar.xz \
-              https://cdn.NetBSD.org/pub/NetBSD/NetBSD-$(uname -r)/$(uname -m)/binary/sets/xbase.tar.xz
+              https://ftp.jaist.ac.jp/pub/NetBSD/NetBSD-$(uname -r)/$(uname -m)/binary/sets/xbase.tar.xz
             xz -dc /tmp/xbase.tar.xz | tar -xpf - -C /
             rm /tmp/xbase.tar.xz
             pkgin -y install bazel openjdk21
