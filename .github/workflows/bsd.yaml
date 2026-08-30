@@ -100,7 +100,12 @@ jobs:
           mem: 4096
           copyback: false
           prepare: |
-            pkg_add -I bazel jdk%21
+            pkg_add -I bazel jdk%21 bash
+            # bazel が展開する tools/test/*.sh は #!/bin/bash で始まる。
+            # OpenBSD の bash は ports なので /usr/local/bin/bash にしか
+            # なく、そのままだと test wrapper も generate-xml.sh も
+            # exit 127 (実行するものが無い) で落ちる。
+            ln -sf /usr/local/bin/bash /bin/bash
           run: |
             set -e
             export JAVA_HOME=$(ls -d /usr/local/jdk-21* | head -1)
